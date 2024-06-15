@@ -1,21 +1,29 @@
+use aws_cost_notification::slack::post_message;
+use aws_cost_notification::aws::get_billing_date;
 use aws_sdk_costexplorer::types::ResultByTime;
-use aws_sdk_costexplorer::{
-    self as costexplorer,
-    types::{self, DateInterval},
-};
+use aws_sdk_costexplorer::types::{self, DateInterval};
+use dotenv::dotenv;
+use serde_json::json;
+use std::error::Error;
 
-#[::tokio::main]
-async fn main() -> Result<(), costexplorer::Error> {
+fn get_amount_in_usd(res: &ResultByTime) -> Option<f64> {
+    let total = res.total.as_ref()?;
+    let metric = total.get("AmortizedCost")?;
+    let amount_str = metric.amount.as_ref()?;
+    amount_str.parse::<f64>().ok()
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    dotenv().ok();
+
     let config = aws_config::load_from_env().await;
     let client = aws_sdk_costexplorer::Client::new(&config);
 
-    // TODO: endは実行日、startはその１ヶ月前で算出させるようにする。
-    let start_date = "2024-05-01";
-    let end_date = "2024-06-01";
-
+    let billing_date = get_billing_date::get_billing_period();
     let time_period = DateInterval::builder()
-        .start(start_date)
-        .end(end_date)
+        .start(billing_date.start_date)
+        .end(billing_date.end_date)
         .build()
         .expect("Failed to build DateInterval struct");
 
@@ -37,13 +45,12 @@ async fn main() -> Result<(), costexplorer::Error> {
             println!("金額: {}", amount * rate);
         }
     }
-    // println!("{:?}", cost_result);
-    Ok(())
-}
+    println!("{:?}", cost_result);
+    let payload = json!({
+        "text": "【6月 AWS請求金額】\n *¥10,684 (税込)* \n USD: $67.87\n (レート: $1 = ¥157.42)",
+    });
 
-fn get_amount_in_usd(res: &ResultByTime) -> Option<f64> {
-    let total = res.total.as_ref()?;
-    let metric = total.get("AmortizedCost")?;
-    let amount_str = metric.amount.as_ref()?;
-    amount_str.parse::<f64>().ok()
+    post_message::post_slack(&payload).await?;
+
+    Ok(())
 }

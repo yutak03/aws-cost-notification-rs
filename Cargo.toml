@@ -6,4 +6,8 @@ edition = "2021"
 [dependencies]
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-costexplorer = "1.33.0"
+dotenv = "0.15.0"
+reqwest = { version = "0.11", features = ["json"] }
+serde_json = "1.0.117"
+time = { version = "0.3", features = ["macros", "formatting"] }
 tokio = { version = "1", features = ["full"] }
