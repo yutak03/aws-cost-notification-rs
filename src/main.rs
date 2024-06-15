@@ -1,5 +1,5 @@
+use aws_cost_notification::aws::get_billing_date::BillingPeriod;
 use aws_cost_notification::slack::post_message;
-use aws_cost_notification::aws::get_billing_date;
 use aws_sdk_costexplorer::types::ResultByTime;
 use aws_sdk_costexplorer::types::{self, DateInterval};
 use dotenv::dotenv;
@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = aws_config::load_from_env().await;
     let client = aws_sdk_costexplorer::Client::new(&config);
 
-    let billing_date = get_billing_date::get_billing_period();
+    let billing_date = BillingPeriod::get_billing_date();
     let time_period = DateInterval::builder()
         .start(billing_date.start_date)
         .end(billing_date.end_date)
