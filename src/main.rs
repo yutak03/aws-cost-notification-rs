@@ -24,24 +24,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .expect("Failed to build DateInterval struct");
 
     // 請求額リクエスト
-    let aws_response = match aws_client
+    let aws_response = aws_client
         .get_cost_and_usage()
         .granularity(types::Granularity::Monthly)
         .time_period(time_period)
         .metrics("BlendedCost")
         .send()
-        .await {
-            Ok(resp) => resp,
-            Err(e) => {
-                eprintln!("Error sending request: {}", e);
-                let err_contents = "Error";
-                let err_payload = json!({
-                    "text": err_contents,
-                });
-                slack_client.post_message(&err_payload).await?;
-                return Err(e.into());
-            }
-    };
+        .await?;
 
     let cost_result = aws_response.results_by_time();
 
