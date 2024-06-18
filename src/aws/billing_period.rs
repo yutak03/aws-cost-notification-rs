@@ -7,7 +7,7 @@ pub struct BillingPeriod {
 
 impl BillingPeriod {
     // 請求期間の取得
-    pub fn get_billing_date() -> Self {
+    pub fn get() -> Self {
         // 実行時現在の日時を取得
         let now = OffsetDateTime::now_utc();
 

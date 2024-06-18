@@ -1,26 +1,22 @@
-use aws_cost_notification::aws::get_billing_date::BillingPeriod;
-use aws_cost_notification::slack::post_message;
+use aws_cost_notification::{
+    aws::billing_period::BillingPeriod,
+    slack::client::SlackClient,
+};
 use aws_sdk_costexplorer::types::ResultByTime;
 use aws_sdk_costexplorer::types::{self, DateInterval};
 use dotenv::dotenv;
 use serde_json::json;
 use std::error::Error;
 
-fn get_amount_in_usd(res: &ResultByTime) -> Option<f64> {
-    let total = res.total.as_ref()?;
-    let metric = total.get("AmortizedCost")?;
-    let amount_str = metric.amount.as_ref()?;
-    amount_str.parse::<f64>().ok()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
 
     let config = aws_config::load_from_env().await;
-    let client = aws_sdk_costexplorer::Client::new(&config);
+    let aws_client = aws_sdk_costexplorer::Client::new(&config);
+    let slack_client = SlackClient::default();
 
-    let billing_date = BillingPeriod::get_billing_date();
+    let billing_date = BillingPeriod::get();
     let time_period = DateInterval::builder()
         .start(billing_date.start_date)
         .end(billing_date.end_date)
@@ -28,29 +24,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .expect("Failed to build DateInterval struct");
 
     // 請求額リクエスト
-    let response = client
+    let aws_response = aws_client
         .get_cost_and_usage()
         .granularity(types::Granularity::Monthly)
         .time_period(time_period)
-        .metrics("AmortizedCost")
+        .metrics("BlendedCost")
         .send()
         .await?;
 
-    let cost_result = response.results_by_time();
-    // TODO: 実行時のレートを設定するようにする
-    let rate = 157.42;
+    let cost_result = aws_response.results_by_time();
 
     for res in cost_result {
         if let Some(amount) = get_amount_in_usd(res) {
-            println!("金額: {}", amount * rate);
+            println!("金額: {} USD", amount);
         }
     }
     println!("{:?}", cost_result);
+    let content = "";
     let payload = json!({
-        "text": "【6月 AWS請求金額】\n *¥10,684 (税込)* \n USD: $67.87\n (レート: $1 = ¥157.42)",
+        "text": content,
     });
 
-    post_message::post_slack(&payload).await?;
+    slack_client.post_message(&payload).await?;
 
     Ok(())
+}
+
+fn get_amount_in_usd(res: &ResultByTime) -> Option<f64> {
+    let total = res.total.as_ref()?;
+    let metric = total.get("BlendedCost")?;
+    let amount_str = metric.amount.as_ref()?;
+    amount_str.parse::<f64>().ok()
 }
